@@ -16,7 +16,7 @@ Stage 0 (scaffolding) only — no database, workflow, or UI logic yet.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in DATABASE_URL, MONGODB_URI, OPENAI_API_KEY
+cp .env.example .env.local   # fill in DATABASE_URL, MONGODB_URI, and the Azure AI Foundry vars
 npm run dev
 ```
 
@@ -28,8 +28,12 @@ See [`.env.example`](.env.example):
 
 - `DATABASE_URL` — Neon Postgres connection string.
 - `MONGODB_URI` — MongoDB Atlas connection string.
-- `OPENAI_API_KEY` — used for `gpt-4o-mini` (eligibility decisions) and
-  `text-embedding-3-small` (policy retrieval).
+- `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`
+  — Azure AI Foundry (Azure OpenAI resource) credentials.
+- `AZURE_OPENAI_CHAT_DEPLOYMENT` — deployment name for the
+  `gpt-4o-mini`-equivalent chat model (eligibility decisions).
+- `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` — deployment name for the
+  `text-embedding-3-small`-equivalent embedding model (policy retrieval).
 
 ## Scripts
 
