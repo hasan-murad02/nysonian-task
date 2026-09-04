@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewQueue } from "@/components/review-queue";
+import { Reconciliation } from "@/components/reconciliation";
 
 export default function Home() {
   return (
@@ -8,9 +9,13 @@ export default function Home() {
       <Tabs defaultValue="queue">
         <TabsList>
           <TabsTrigger value="queue">Review Queue</TabsTrigger>
+          <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
         </TabsList>
         <TabsContent value="queue">
           <ReviewQueue />
+        </TabsContent>
+        <TabsContent value="reconciliation">
+          <Reconciliation />
         </TabsContent>
       </Tabs>
     </div>
