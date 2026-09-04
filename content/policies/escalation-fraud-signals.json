@@ -1,0 +1,9 @@
+{
+  "id": "escalation-fraud-signals",
+  "title": "Fraud and Abuse Signals",
+  "category": "escalation",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Requests that combine multiple soft signals — for example a missing-item claim on a high-value order, or a damage claim with no delivery confirmation on file — should be routed to human review rather than auto-approved. No single signal alone is grounds for denial; the goal is a second set of eyes, not automatic rejection."
+}

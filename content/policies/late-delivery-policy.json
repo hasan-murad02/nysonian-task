@@ -1,0 +1,9 @@
+{
+  "id": "late-delivery-policy",
+  "title": "Late Delivery Compensation",
+  "category": "late",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Orders that arrive more than 7 days after the originally quoted delivery date are eligible for a partial refund of shipping costs, or a goodwill credit at the agent's discretion, up to the goodwill limits defined in the goodwill policy. A late delivery alone does not entitle the customer to a full order refund unless the item is also no longer wanted, in which case the standard return window applies."
+}

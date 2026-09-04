@@ -1,0 +1,9 @@
+{
+  "id": "escalation-repeat-requests",
+  "title": "Repeat Refund Requests",
+  "category": "escalation",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Customers who submit more than two refund requests within a rolling 90-day period should be escalated to human review rather than auto-approved, even if each individual request would otherwise qualify. This is a pattern-based signal, not an accusation, and should be reviewed on its merits."
+}

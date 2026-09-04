@@ -1,6 +1,9 @@
-// Drops every table in Postgres (schema_migrations included) and drops the
-// Mongo database entirely — a true clean slate. Run `npm run db:migrate`
-// afterward to recreate the Postgres schema before using the app again.
+// Drops every table in Postgres (schema_migrations included) and clears
+// Mongo's decision_log — a true clean slate for replay/acceptance testing.
+// policies is left alone: it's the seeded knowledge base, not per-run test
+// data, the same way schema_migrations survives on the Postgres side. Run
+// `npm run db:migrate` afterward to recreate the Postgres schema before
+// using the app again.
 
 import dns from "node:dns";
 import { neonConfig, Pool } from "@neondatabase/serverless";
@@ -43,11 +46,11 @@ async function resetMongo() {
   const client = new MongoClient(mongoUri);
   try {
     await client.connect();
-    await client.db(MONGO_DB_NAME).dropDatabase();
+    await client.db(MONGO_DB_NAME).collection("decision_log").deleteMany({});
   } finally {
     await client.close();
   }
-  console.log(`mongo: database "${MONGO_DB_NAME}" dropped`);
+  console.log("mongo: decision_log cleared (policies preserved)");
 }
 
 await Promise.all([resetPostgres(), resetMongo()]);

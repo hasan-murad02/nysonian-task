@@ -1,0 +1,9 @@
+{
+  "id": "damage-general",
+  "title": "Damaged Item — General Policy",
+  "category": "damage",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Items reported as damaged on arrival are eligible for a full refund or replacement if reported within 14 days of delivery, regardless of the standard return window. Customers should provide photo evidence of the damage where possible, though a refund should not be withheld solely for lack of photos if the claim is otherwise credible."
+}

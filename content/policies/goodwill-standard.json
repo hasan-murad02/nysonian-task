@@ -1,0 +1,9 @@
+{
+  "id": "goodwill-standard",
+  "title": "Standard Goodwill Refund Limit",
+  "category": "goodwill",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Agents may issue discretionary goodwill refunds or credits up to $50 without further approval, for situations that don't cleanly fit another policy but where retaining customer trust is worth the cost. Amounts above $50 require the escalation path for high-value refunds."
+}

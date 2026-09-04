@@ -1,0 +1,9 @@
+{
+  "id": "escalation-high-value",
+  "title": "High-Value Refund Escalation",
+  "category": "escalation",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Any single refund request for $500 or more must be escalated to human review regardless of eligibility or policy fit. This threshold exists to keep a person in the loop on large payouts, not because such requests are presumed fraudulent."
+}

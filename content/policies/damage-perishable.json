@@ -1,0 +1,9 @@
+{
+  "id": "damage-perishable",
+  "title": "Damaged Perishable/Food Items",
+  "category": "damage",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Perishable or food items reported as damaged, spoiled, or spilled in transit are eligible for a full refund if reported within 48 hours of delivery. Given the short shelf life of these items, no photo evidence or physical return is required."
+}

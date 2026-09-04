@@ -1,0 +1,9 @@
+{
+  "id": "missing-item-policy",
+  "title": "Missing or Incomplete Order",
+  "category": "missing_item",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "If a customer reports that an item or part of their order never arrived, a full refund for the missing portion is issued once the claim is made, without requiring proof of non-delivery. Repeated missing-item claims from the same customer should be flagged for review under the fraud-signals escalation policy rather than auto-approved."
+}

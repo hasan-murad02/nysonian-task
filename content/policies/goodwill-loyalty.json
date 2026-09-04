@@ -1,0 +1,9 @@
+{
+  "id": "goodwill-loyalty",
+  "title": "Loyalty Customer Goodwill Limit",
+  "category": "goodwill",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "For customers with loyalty or VIP status, the discretionary goodwill limit is raised to $150 without further approval, reflecting their higher lifetime value. This policy applies only to goodwill gestures, not to standard eligible refunds, which are unaffected by loyalty status."
+}

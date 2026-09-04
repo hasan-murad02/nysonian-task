@@ -1,0 +1,9 @@
+{
+  "id": "damage-electronics",
+  "title": "Damaged/Defective Electronics",
+  "category": "damage",
+  "region": "global",
+  "effective_from": "2025-01-01",
+  "superseded_by": null,
+  "body": "Electronics reported as dead-on-arrival (DOA) or defective are eligible for a full refund within 30 days of delivery. Beyond 30 days, the item falls under manufacturer warranty rather than our refund policy, and the customer should be directed to the manufacturer."
+}
