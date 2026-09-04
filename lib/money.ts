@@ -15,3 +15,13 @@ export function toMinorUnits(amount: number): number | null {
 export function formatMoney(minorUnits: number, currency: string = "USD"): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minorUnits / 100);
 }
+
+// UI callers get minorUnits as a string (Postgres bigint columns come back
+// as strings, not JS numbers, to avoid precision loss) and sometimes don't
+// have a value at all (e.g. an order that hasn't captured payment yet) —
+// this is the one place that string/null handling lives, instead of each
+// component wrapping formatMoney the same way independently.
+export function formatMoneyFromString(minorUnits: string | null, currency: string | null): string {
+  if (minorUnits === null) return "—";
+  return formatMoney(Number(minorUnits), currency ?? "USD");
+}

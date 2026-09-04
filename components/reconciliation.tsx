@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatMoney as formatMoneyMinorUnits } from "@/lib/money";
+import { formatMoneyFromString as formatMoney } from "@/lib/money";
 
 interface ReconciliationRow {
   order_id: string;
@@ -42,10 +42,6 @@ function flagVariant(flag: ReconciliationRow["flag"]): "default" | "secondary" |
   if (flag === "integrity_alarm") return "destructive";
   if (flag === "not_refunded") return "outline";
   return "default";
-}
-
-function formatMoney(minorUnits: string, currency: string): string {
-  return formatMoneyMinorUnits(Number(minorUnits), currency);
 }
 
 export function Reconciliation() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Table,
@@ -27,11 +27,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatMoney as formatMoneyMinorUnits } from "@/lib/money";
+import { formatMoneyFromString as formatMoney } from "@/lib/money";
 
+// Every value workflow_runs.status can hold (see the CHECK constraint in
+// db/migrations/001_init.sql) — not just the "expected" resting states.
+// A run stuck in an intermediate step (e.g. issuing_refund, if
+// advanceWorkflow throws after the status write but before completing)
+// needs to stay reachable from this filter, or an operator has no way to
+// find it at all.
 const STATUSES = [
-  "review_pending",
   "pending_order",
+  "loading_order",
+  "checking_eligibility",
+  "deciding",
+  "issuing_refund",
+  "notifying",
+  "review_pending",
   "completed",
   "rejected",
   "failed",
@@ -71,11 +82,6 @@ interface RunDetail {
   modelReason: string | null;
 }
 
-function formatMoney(minorUnits: string | null, currency: string | null): string {
-  if (minorUnits === null) return "—";
-  return formatMoneyMinorUnits(Number(minorUnits), currency ?? "USD");
-}
-
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   if (status === "completed") return "default";
   if (status === "rejected" || status === "failed") return "destructive";
@@ -98,15 +104,29 @@ export function ReviewQueue() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [acting, setActing] = useState(false);
 
+  // Both requestId refs guard against a stale response overwriting newer
+  // state — e.g. open row A, close before A's fetch resolves, open row B:
+  // without this, A's response can land after B's and show A's context
+  // (recommendation, citations, trace) under B's dialog. Only the response
+  // whose id still matches "the latest request we issued" is applied.
+  const queueRequestId = useRef(0);
+  const detailRequestId = useRef(0);
+
   // setLoading(true) happens at the point that triggers a reload (the
   // status Select's onValueChange, the row click, act()'s own call below)
   // rather than inside the effect itself — an effect setting state
   // synchronously as its own first statement triggers an extra render pass.
   const loadQueue = useCallback(() => {
+    const requestId = ++queueRequestId.current;
     fetch(`/api/refunds/queue?status=${status}`)
       .then((res) => res.json())
-      .then((data) => setRuns(data.runs ?? []))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (queueRequestId.current !== requestId) return;
+        setRuns(data.runs ?? []);
+      })
+      .finally(() => {
+        if (queueRequestId.current === requestId) setLoading(false);
+      });
   }, [status]);
 
   useEffect(() => {
@@ -115,10 +135,16 @@ export function ReviewQueue() {
 
   useEffect(() => {
     if (!selectedId) return;
+    const requestId = ++detailRequestId.current;
     fetch(`/api/refunds/${selectedId}`)
       .then((res) => res.json())
-      .then(setDetail)
-      .finally(() => setDetailLoading(false));
+      .then((data) => {
+        if (detailRequestId.current !== requestId) return;
+        setDetail(data);
+      })
+      .finally(() => {
+        if (detailRequestId.current === requestId) setDetailLoading(false);
+      });
   }, [selectedId]);
 
   async function act(action: "approve" | "reject") {
@@ -284,8 +310,8 @@ export function ReviewQueue() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {detail.steps.map((s, i) => (
-                      <TableRow key={i}>
+                    {detail.steps.map((s) => (
+                      <TableRow key={`${s.step}-${s.attempt}`}>
                         <TableCell>{s.step}</TableCell>
                         <TableCell>{s.attempt}</TableCell>
                         <TableCell>
