@@ -28,9 +28,8 @@ jobs:
       # Deployment, and the real env vars, are handled by Vercel, not here.
       DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
       MONGODB_URI: mongodb://placeholder:placeholder@localhost:27017/placeholder
-      AZURE_OPENAI_ENDPOINT: https://placeholder.openai.azure.com/
+      AZURE_OPENAI_ENDPOINT: https://placeholder.services.ai.azure.com
       AZURE_OPENAI_API_KEY: placeholder
-      AZURE_OPENAI_API_VERSION: 2024-10-21
       AZURE_OPENAI_CHAT_DEPLOYMENT: placeholder
       AZURE_OPENAI_EMBEDDING_DEPLOYMENT: placeholder
     steps:

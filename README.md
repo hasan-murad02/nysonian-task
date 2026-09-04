@@ -28,8 +28,8 @@ See [`.env.example`](.env.example):
 
 - `DATABASE_URL` — Neon Postgres connection string.
 - `MONGODB_URI` — MongoDB Atlas connection string.
-- `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`
-  — Azure AI Foundry (Azure OpenAI resource) credentials.
+- `AZURE_OPENAI_ENDPOINT` (base endpoint only, no path suffix),
+  `AZURE_OPENAI_API_KEY` — Azure AI Foundry credentials.
 - `AZURE_OPENAI_CHAT_DEPLOYMENT` — deployment name for the
   `gpt-4o-mini`-equivalent chat model (eligibility decisions).
 - `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` — deployment name for the
