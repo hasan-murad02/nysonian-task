@@ -6,12 +6,21 @@
 //   terminal 1: npm run dev
 //   terminal 2: node --env-file=.env.local scripts/verify.mjs [phases...]
 //
-// Phases: ingest workflow retrieval review replay
-//   (no args)  -> ingest, workflow, retrieval, review — fast, non-destructive,
-//                 uses per-run-namespaced test data so re-running is always safe.
-//   replay/all -> ALSO runs the full 786-event replay + PLAN.md's 6 acceptance
-//                 checks. Slow (live LLM call per refund) and DESTRUCTIVE
-//                 (resets the database first) — must be requested explicitly.
+// Phases: ingest workflow retrieval review replay-seq1 replay-seq2 replay-parallel replay
+//   (no args)      -> ingest, workflow, retrieval, review — fast, non-destructive,
+//                     uses per-run-namespaced test data so re-running is always safe.
+//   replay-seq1    -> resets the DB, one full sequential replay, checks 1-4.
+//   replay-seq2    -> no reset (builds on replay-seq1's state), a second full
+//                     sequential replay, check 5 (idempotency).
+//   replay-parallel -> resets the DB again, one full replay at concurrency 8,
+//                     check 6. Independent of replay-seq1/replay-seq2.
+//   replay/all     -> chains all three replay-* sub-phases back to back for
+//                     convenience. Each is slow on its own (~20-30+ min, live
+//                     LLM call per refund) and replay-seq1/replay-parallel are
+//                     DESTRUCTIVE (reset the DB) — prefer running the three
+//                     separately so a timeout on one doesn't lose the others'
+//                     already-completed work. Don't combine "replay" with an
+//                     explicit replay-* name — that re-runs it twice.
 //
 // Set BASE=http://localhost:PORT if the dev server isn't on 3000.
 
