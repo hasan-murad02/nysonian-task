@@ -29,11 +29,11 @@ const CURRENCY_TO_REGION: Record<string, string> = { USD: "US", EUR: "EU", GBP: 
 export async function decideEligibility(runId: string, orderId: string): Promise<string> {
   const startedAt = new Date();
 
-  const [run] = await sql`SELECT reason, requested_amount FROM workflow_runs WHERE id = ${runId}`;
-  const [order] = await sql`SELECT currency, captured_amount FROM orders WHERE order_id = ${orderId}`;
-  const [{ refunded }] = await sql`
-    SELECT COALESCE(SUM(amount), 0) AS refunded FROM ledger_entries WHERE order_id = ${orderId}
-  `;
+  const [[run], [order], [{ refunded }]] = await Promise.all([
+    sql`SELECT reason, requested_amount FROM workflow_runs WHERE id = ${runId}`,
+    sql`SELECT currency, captured_amount FROM orders WHERE order_id = ${orderId}`,
+    sql`SELECT COALESCE(SUM(amount), 0) AS refunded FROM ledger_entries WHERE order_id = ${orderId}`,
+  ]);
 
   const requestedAmount = Number(run.requested_amount);
   const capturedAmount = Number(order.captured_amount);

@@ -22,14 +22,22 @@ interface Run {
 }
 
 export async function advanceWorkflow(runId: string): Promise<void> {
-  for (let i = 0; i < 10; i++) {
-    const [run] = await sql`
-      SELECT id, order_id, status, requested_amount FROM workflow_runs WHERE id = ${runId}
-    `;
-    if (!run || !CONTINUABLE.has(run.status)) return;
+  const [initial] = await sql`
+    SELECT id, order_id, status, requested_amount FROM workflow_runs WHERE id = ${runId}
+  `;
+  if (!initial) return;
 
-    const nextStatus = await dispatch(run as Run);
+  // Each step's own conditional UPDATE (WHERE status = <expected>) is what
+  // actually guards against concurrent advancement, so re-reading status
+  // from the DB every iteration is redundant — the previous step's return
+  // value already reflects the row it just committed.
+  let run = initial as Run;
+  for (let i = 0; i < 10; i++) {
+    if (!CONTINUABLE.has(run.status)) return;
+
+    const nextStatus = await dispatch(run);
     if (nextStatus === run.status) return; // no progress — waiting, or no handler yet
+    run = { ...run, status: nextStatus };
   }
 }
 
@@ -90,10 +98,10 @@ async function loadOrder(runId: string, orderId: string): Promise<string> {
 // every ledger entry for that order across all its runs), not per run.
 async function checkEligibility(runId: string, orderId: string, requestedAmount: string): Promise<string> {
   const startedAt = new Date();
-  const [order] = await sql`SELECT captured_amount FROM orders WHERE order_id = ${orderId}`;
-  const [{ refunded }] = await sql`
-    SELECT COALESCE(SUM(amount), 0) AS refunded FROM ledger_entries WHERE order_id = ${orderId}
-  `;
+  const [[order], [{ refunded }]] = await Promise.all([
+    sql`SELECT captured_amount FROM orders WHERE order_id = ${orderId}`,
+    sql`SELECT COALESCE(SUM(amount), 0) AS refunded FROM ledger_entries WHERE order_id = ${orderId}`,
+  ]);
   const remaining = Number(order.captured_amount) - Number(refunded);
   const requested = Number(requestedAmount);
 
