@@ -10,7 +10,8 @@
     "db:migrate": "node --env-file=.env.local db/run-migrations.mjs",
     "db:reset": "node --env-file=.env.local db/reset.mjs",
     "seed:events": "node scripts/seed.mjs",
-    "seed:policies": "node --env-file=.env.local scripts/seed-policies.mjs"
+    "seed:policies": "node --env-file=.env.local scripts/seed-policies.mjs",
+    "verify": "node --env-file=.env.local scripts/verify.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
