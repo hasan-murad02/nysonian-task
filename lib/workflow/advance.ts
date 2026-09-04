@@ -42,8 +42,10 @@ async function dispatch(run: Run): Promise<string> {
       return decide(run.id);
     case "issuing_refund":
       return issueRefund(run.id, run.order_id, run.requested_amount);
+    case "notifying":
+      return notify(run.id);
     default:
-      return run.status; // e.g. 'notifying' with no handler wired up yet
+      return run.status;
   }
 }
 
@@ -155,4 +157,59 @@ async function issueRefund(runId: string, orderId: string, requestedAmount: stri
   if (updateResult.length === 0) return "issuing_refund";
   await logStep(runId, "issueRefund", 1, "succeeded", startedAt);
   return "notifying";
+}
+
+const NOTIFY_MAX_ATTEMPTS = 3;
+const NOTIFY_BASE_DELAY_MS = 200;
+const NOTIFY_FAILURE_RATE = 0.15;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Stub notification provider — fails ~15% of the time on purpose, to
+// exercise the retry/backoff path below.
+async function sendNotification(): Promise<void> {
+  if (Math.random() < NOTIFY_FAILURE_RATE) {
+    throw new Error("notification provider timeout");
+  }
+}
+
+// Refund issuance is a separate, already-committed fact by the time this
+// runs (issueRefund already moved status past issuing_refund). This reads
+// that fact rather than re-deriving it, and a permanently-failed notify
+// never touches ledger_entries — it only ever moves this run to 'failed',
+// which means "the notification didn't go out", not "the refund didn't."
+async function notify(runId: string): Promise<string> {
+  const [ledger] = await sql`SELECT id FROM ledger_entries WHERE workflow_run_id = ${runId}`;
+  if (!ledger) {
+    throw new Error(`notify: no ledger_entries row for workflow_run_id=${runId}`);
+  }
+
+  for (let attempt = 1; attempt <= NOTIFY_MAX_ATTEMPTS; attempt++) {
+    const startedAt = new Date();
+    try {
+      await sendNotification();
+      await logStep(runId, "notify", attempt, "succeeded", startedAt);
+      const updated = await sql`
+        UPDATE workflow_runs SET status = 'completed', updated_at = now()
+        WHERE id = ${runId} AND status = 'notifying'
+        RETURNING id
+      `;
+      return updated.length === 0 ? "notifying" : "completed";
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await logStep(runId, "notify", attempt, "failed", startedAt, message);
+      if (attempt < NOTIFY_MAX_ATTEMPTS) {
+        await sleep(NOTIFY_BASE_DELAY_MS * 2 ** (attempt - 1));
+      }
+    }
+  }
+
+  const updated = await sql`
+    UPDATE workflow_runs SET status = 'failed', updated_at = now()
+    WHERE id = ${runId} AND status = 'notifying'
+    RETURNING id
+  `;
+  return updated.length === 0 ? "notifying" : "failed";
 }
