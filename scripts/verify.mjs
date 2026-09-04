@@ -357,7 +357,11 @@ async function phaseReplaySeq2() {
   const lines = loadEventLines();
   const before = await q("SELECT count(*)::int c FROM raw_events");
   if (before[0].c === 0) {
-    console.error("raw_events is empty — run `replay-seq1` first, this sub-phase assumes that already happened.");
+    console.error(
+      "raw_events is empty, so there's nothing for a second replay to be a no-op against — run `replay-seq1` first. " +
+        "(A nonzero count here doesn't prove replay-seq1 specifically ran — e.g. the ingest/workflow phases leave a " +
+        "few rows too — but if it hasn't, the no-op check below will correctly fail rather than silently pass.)",
+    );
     process.exit(1);
   }
 
@@ -417,6 +421,16 @@ async function main() {
   const invalid = requested.filter((p) => !PHASE_ORDER.includes(p));
   if (invalid.length) {
     console.error(`Unknown phase(s): ${invalid.join(", ")}. Valid: ${PHASE_ORDER.join(", ")} (or "all")`);
+    process.exit(1);
+  }
+  // "replay" already chains all three replay-* sub-phases — combining it
+  // with an explicit one would silently re-run that sub-phase a second
+  // time (its dispatch below fires once for the explicit name, once more
+  // inside phaseReplay()).
+  const replayGranular = ["replay-seq1", "replay-seq2", "replay-parallel"];
+  const redundant = replayGranular.filter((p) => requested.includes(p));
+  if (requested.includes("replay") && redundant.length) {
+    console.error(`"replay" already runs ${replayGranular.join(", ")} — don't also pass ${redundant.join(", ")}.`);
     process.exit(1);
   }
 
