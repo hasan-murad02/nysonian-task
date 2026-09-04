@@ -276,39 +276,53 @@ async function phaseReview() {
 }
 
 // --------------------------------------------------------- phase: replay ---
-async function phaseReplay() {
-  section("4. Full replay — the six acceptance checks", "PLAN Stage 7");
-  console.log(`${YELLOW}This RESETS your database and replays all 786 events in events.ndjson twice, plus once more in parallel.${RESET}`);
-  console.log(`${YELLOW}Expect several minutes — most refund.requested events trigger a real LLM call.${RESET}`);
+// Split into three independently-runnable sub-phases rather than one
+// monolithic function. A full sequential pass over ~787 events is
+// dominated by real Azure LLM latency on refund.requested events and can
+// take 20-30+ minutes — long enough that a single all-in-one run risks
+// losing already-completed, expensive work (an earlier reset + full
+// sequential pass) to an unrelated timeout on the *next* step. Each
+// sub-phase below can be re-run on its own without re-paying for the
+// ones that already succeeded.
+const EVENTS_FILE = "events.ndjson";
 
-  const lines = readFileSync("events.ndjson", "utf8").split("\n").filter(Boolean);
-
-  function resetAndMigrate() {
-    execSync("npm run db:reset", { stdio: "inherit" });
-    execSync("npm run db:migrate", { stdio: "inherit" });
+function resetAndMigrate() {
+  execSync("npm run db:reset", { stdio: "inherit" });
+  execSync("npm run db:migrate", { stdio: "inherit" });
+}
+function loadEventLines() {
+  return readFileSync(EVENTS_FILE, "utf8").split("\n").filter(Boolean);
+}
+async function replaySequential(lines) {
+  let i = 0;
+  for (const line of lines) {
+    await fetch(`${BASE}/api/webhooks/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: line });
+    i++;
+    if (i % 100 === 0) console.log(`  ...${i}/${lines.length}`);
   }
-  async function replaySequential() {
-    let i = 0;
-    for (const line of lines) {
+}
+async function replayParallel(lines) {
+  let i = 0;
+  async function worker() {
+    while (i < lines.length) {
+      const line = lines[i++];
       await fetch(`${BASE}/api/webhooks/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: line });
-      i++;
-      if (i % 100 === 0) console.log(`  ...${i}/${lines.length}`);
     }
   }
-  async function replayParallel() {
-    let i = 0;
-    async function worker() {
-      while (i < lines.length) {
-        const line = lines[i++];
-        await fetch(`${BASE}/api/webhooks/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: line });
-      }
-    }
-    await Promise.all(Array.from({ length: 8 }, worker));
-  }
+  await Promise.all(Array.from({ length: 8 }, worker));
+}
 
+// Sub-phase 1: reset, one full sequential pass, checks 1-4. Run this first
+// — the other two sub-phases assume a DB already in this state.
+async function phaseReplaySeq1() {
+  section("4a. Sequential replay — checks 1-4", "PLAN Stage 7");
+  console.log(`${YELLOW}This RESETS your database and replays ${EVENTS_FILE} once, sequentially.${RESET}`);
+  console.log(`${YELLOW}Expect 20-30+ minutes — most refund.requested events trigger a real LLM call.${RESET}`);
+
+  const lines = loadEventLines();
   resetAndMigrate();
   console.log(`\nSequential replay: ${lines.length} events...`);
-  await replaySequential();
+  await replaySequential(lines);
 
   explain("Check 1 — every event_id appears in raw_events exactly once, even though the file itself contains deliberate exact-duplicate lines.");
   const dupes = await q("SELECT event_id FROM raw_events GROUP BY event_id HAVING count(*) > 1");
@@ -331,16 +345,44 @@ async function phaseReplay() {
   const ghost9999 = await q("SELECT status FROM workflow_runs WHERE order_id = 'ord_9999'");
   check("exactly 3 workflow_runs rows for ord_9999, all pending_order", ghost9999.length === 3 && ghost9999.every((r) => r.status === "pending_order"), JSON.stringify(ghost9999));
 
-  explain("Check 5 — replaying the entire file a second time must change nothing at all.");
-  const [before] = await q("SELECT (SELECT count(*) FROM raw_events) raw, (SELECT count(*) FROM ledger_entries) ledger");
-  await replaySequential();
-  const [after] = await q("SELECT (SELECT count(*) FROM raw_events) raw, (SELECT count(*) FROM ledger_entries) ledger");
-  check("second full replay is a true no-op", before.raw === after.raw && before.ledger === after.ledger, `before ${JSON.stringify(before)} after ${JSON.stringify(after)}`);
+  console.log(`\n${DIM}Next: run \`replay-seq2\` (no reset — builds on this DB state) for check 5.${RESET}`);
+}
 
-  console.log(`\nResetting again for the parallel pass...`);
+// Sub-phase 2: assumes seq1 already ran against the current DB. Replays
+// the same file again, unchanged, and confirms nothing moved — check 5.
+async function phaseReplaySeq2() {
+  section("4b. Second sequential replay — check 5 (idempotency)", "PLAN Stage 7");
+  console.log(`${YELLOW}Does NOT reset the DB — assumes replay-seq1 already ran. Replays the same ${EVENTS_FILE} again.${RESET}`);
+
+  const lines = loadEventLines();
+  const before = await q("SELECT count(*)::int c FROM raw_events");
+  if (before[0].c === 0) {
+    console.error("raw_events is empty — run `replay-seq1` first, this sub-phase assumes that already happened.");
+    process.exit(1);
+  }
+
+  explain("Check 5 — replaying the entire file a second time must change nothing at all.");
+  const [beforeCounts] = await q("SELECT (SELECT count(*) FROM raw_events) raw, (SELECT count(*) FROM ledger_entries) ledger");
+  console.log(`Second sequential replay: ${lines.length} events...`);
+  await replaySequential(lines);
+  const [afterCounts] = await q("SELECT (SELECT count(*) FROM raw_events) raw, (SELECT count(*) FROM ledger_entries) ledger");
+  check(
+    "second full replay is a true no-op",
+    beforeCounts.raw === afterCounts.raw && beforeCounts.ledger === afterCounts.ledger,
+    `before ${JSON.stringify(beforeCounts)} after ${JSON.stringify(afterCounts)}`,
+  );
+}
+
+// Sub-phase 3: resets on its own (needs a clean slate to compare fairly
+// against seq1's sequential result) and replays with concurrency 8.
+async function phaseReplayParallel() {
+  section("4c. Parallel replay — check 6 (concurrency)", "PLAN Stage 7");
+  console.log(`${YELLOW}This RESETS your database again and replays ${EVENTS_FILE} once, with concurrency 8.${RESET}`);
+
+  const lines = loadEventLines();
   resetAndMigrate();
   console.log(`Parallel replay (concurrency 8): ${lines.length} events...`);
-  await replayParallel();
+  await replayParallel(lines);
 
   explain("Check 6 — the same correctness guarantees (checks 1 and 3) must hold under real 8-way concurrency, not just sequentially.");
   const dupesParallel = await q("SELECT event_id FROM raw_events GROUP BY event_id HAVING count(*) > 1");
@@ -353,13 +395,25 @@ async function phaseReplay() {
   note("auto-approve vs. review split can differ slightly from the sequential pass — each refund makes a live LLM call, not a deterministic function. The hard guarantees above (never a duplicate, never an over-refund) must be identical; the exact routing is allowed to vary.");
 }
 
+// Convenience alias: all three sub-phases back to back. Prefer running the
+// three separately (each is independently resumable) unless you're
+// confident this will complete well within your available time.
+async function phaseReplay() {
+  await phaseReplaySeq1();
+  await phaseReplaySeq2();
+  await phaseReplayParallel();
+}
+
 // ------------------------------------------------------------------ main --
-const PHASE_ORDER = ["ingest", "workflow", "retrieval", "review", "replay"];
+const PHASE_ORDER = ["ingest", "workflow", "retrieval", "review", "replay-seq1", "replay-seq2", "replay-parallel", "replay"];
 const DEFAULT_PHASES = ["ingest", "workflow", "retrieval", "review"];
+// "all" expands to the three granular, independently-resumable replay
+// sub-phases — not also the "replay" alias, which would just re-run them.
+const ALL_PHASES = ["ingest", "workflow", "retrieval", "review", "replay-seq1", "replay-seq2", "replay-parallel"];
 
 async function main() {
   const args = process.argv.slice(2);
-  const requested = args.length === 0 ? DEFAULT_PHASES : args.includes("all") ? PHASE_ORDER : args;
+  const requested = args.length === 0 ? DEFAULT_PHASES : args.includes("all") ? ALL_PHASES : args;
   const invalid = requested.filter((p) => !PHASE_ORDER.includes(p));
   if (invalid.length) {
     console.error(`Unknown phase(s): ${invalid.join(", ")}. Valid: ${PHASE_ORDER.join(", ")} (or "all")`);
@@ -373,8 +427,11 @@ async function main() {
 
   console.log(`${BOLD}Refund Triage Console — live verification${RESET}`);
   console.log(`${DIM}Target: ${BASE}   Run id: ${RUN}   Phases: ${requested.join(", ")}${RESET}`);
-  if (!requested.includes("replay")) {
-    console.log(`${DIM}(pass "replay" or "all" to also run the full 786-event replay + 6 acceptance checks — resets the DB, takes a few minutes)${RESET}`);
+  const replayRequested = requested.some((p) => p.startsWith("replay"));
+  if (!replayRequested) {
+    console.log(
+      `${DIM}(pass "replay-seq1", "replay-seq2", "replay-parallel" one at a time — or "all"/"replay" to chain them — for the full ${EVENTS_FILE} replay + 6 acceptance checks. Each takes 20-30+ minutes and replay-seq1/replay-parallel reset the DB.)${RESET}`,
+    );
   }
 
   await mongoClient.connect();
@@ -386,6 +443,9 @@ async function main() {
     if (requested.includes("workflow")) await phaseWorkflow(ctx);
     if (requested.includes("retrieval")) await phaseRetrieval();
     if (requested.includes("review")) await phaseReview();
+    if (requested.includes("replay-seq1")) await phaseReplaySeq1();
+    if (requested.includes("replay-seq2")) await phaseReplaySeq2();
+    if (requested.includes("replay-parallel")) await phaseReplayParallel();
     if (requested.includes("replay")) await phaseReplay();
   } finally {
     await pool.end();
