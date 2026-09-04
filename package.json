@@ -11,6 +11,7 @@
     "db:reset": "node --env-file=.env.local db/reset.mjs",
     "seed:events": "node scripts/seed.mjs",
     "seed:policies": "node --env-file=.env.local scripts/seed-policies.mjs",
+    "eval:retrieval": "node --env-file=.env.local scripts/eval-retrieval.mjs",
     "verify": "node --env-file=.env.local scripts/verify.mjs"
   },
   "dependencies": {
