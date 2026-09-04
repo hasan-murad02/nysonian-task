@@ -3,6 +3,7 @@ import { getMongoDb } from "@/lib/db/mongo";
 import { sql } from "@/lib/db/postgres";
 import { azureClient, CHAT_DEPLOYMENT } from "@/lib/ai/azure";
 import { retrievePolicies } from "@/lib/retrieval/search";
+import { formatMoney } from "@/lib/money";
 
 const CONFIDENCE_THRESHOLD = 0.7;
 const RETRIEVAL_K = 5;
@@ -18,10 +19,6 @@ const decisionResponseSchema = z.object({
 // a reasonable proxy given what's actually available, not a guess dressed
 // up as fact.
 const CURRENCY_TO_REGION: Record<string, string> = { USD: "US", EUR: "EU", GBP: "UK" };
-
-function formatMoney(minorUnits: number): string {
-  return `$${(minorUnits / 100).toFixed(2)}`;
-}
 
 // Guardrails, not policy: confidence below threshold or a response that
 // doesn't parse both force review_pending regardless of what the model
@@ -42,8 +39,9 @@ export async function decideEligibility(runId: string, orderId: string): Promise
   const capturedAmount = Number(order.captured_amount);
   const remaining = capturedAmount - Number(refunded);
   const region = order.currency ? (CURRENCY_TO_REGION[order.currency] ?? "global") : "global";
+  const currency = order.currency ?? "USD";
 
-  const query = `Refund request: reason=${run.reason ?? "unspecified"}, region=${region}, requested=${formatMoney(requestedAmount)} of ${formatMoney(capturedAmount)} captured (${formatMoney(remaining)} remaining before this request)`;
+  const query = `Refund request: reason=${run.reason ?? "unspecified"}, region=${region}, requested=${formatMoney(requestedAmount, currency)} of ${formatMoney(capturedAmount, currency)} captured (${formatMoney(remaining, currency)} remaining before this request)`;
   const retrieved = await retrievePolicies(query, RETRIEVAL_K);
   const policyContext = retrieved.map((p) => `[${p.id}] ${p.title}\n${p.body}`).join("\n\n");
 
@@ -53,9 +51,9 @@ export async function decideEligibility(runId: string, orderId: string): Promise
   const userPrompt = `Order: ${orderId}
 Refund reason: ${run.reason ?? "unspecified"}
 Region: ${region}
-Requested amount: ${formatMoney(requestedAmount)}
-Order captured amount: ${formatMoney(capturedAmount)}
-Remaining balance before this request: ${formatMoney(remaining)}
+Requested amount: ${formatMoney(requestedAmount, currency)}
+Order captured amount: ${formatMoney(capturedAmount, currency)}
+Remaining balance before this request: ${formatMoney(remaining, currency)}
 
 Relevant policies:
 ${policyContext}`;
