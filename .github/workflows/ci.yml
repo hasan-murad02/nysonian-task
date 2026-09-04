@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders only — lib/db/postgres.ts and lib/db/mongo.ts throw at
+      # module load if these are unset (Next.js imports API routes during
+      # "Collecting page data"), but the build never actually connects.
+      # Deployment, and the real env vars, are handled by Vercel, not here.
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      MONGODB_URI: mongodb://placeholder:placeholder@localhost:27017/placeholder
+      AZURE_OPENAI_ENDPOINT: https://placeholder.openai.azure.com/
+      AZURE_OPENAI_API_KEY: placeholder
+      AZURE_OPENAI_API_VERSION: 2024-10-21
+      AZURE_OPENAI_CHAT_DEPLOYMENT: placeholder
+      AZURE_OPENAI_EMBEDDING_DEPLOYMENT: placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build

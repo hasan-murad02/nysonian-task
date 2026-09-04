@@ -133,28 +133,61 @@ async function decide(runId: string): Promise<string> {
   return "review_pending";
 }
 
-// The ledger insert and the status advance past issuing_refund happen in one
-// atomic transaction — there's no world where a crash leaves a ledger row
-// committed but the run still reads issuing_refund, which would make a
-// retry double-issue. ON CONFLICT DO NOTHING is the second idempotency
-// guarantee: this is safe to call again even if a prior attempt already
-// wrote the ledger row and only failed to commit the status update.
+// A row lock on the order (not just the run) is what actually prevents an
+// over-refund: checkEligibility's earlier pass is a snapshot, and two
+// different runs against the same order can each look eligible on their own
+// while being collectively over budget once both are approved. Locking the
+// order row serializes any two runs issuing against it, so the second one's
+// remaining-balance read always reflects the first one's committed ledger
+// entry, not a stale snapshot — computed in SQL as bigint arithmetic, so no
+// JS float/precision concerns either. ON CONFLICT DO NOTHING is the
+// separate, per-run guarantee: even two concurrent calls for the exact same
+// run can't create two ledger rows for it, and it's what makes this safe to
+// call again after a crash that wrote the ledger row but not the status.
 async function issueRefund(runId: string, orderId: string, requestedAmount: string): Promise<string> {
   const startedAt = new Date();
-  const [, updateResult] = await sql.transaction([
-    sql`
-      INSERT INTO ledger_entries (workflow_run_id, order_id, amount)
-      VALUES (${runId}, ${orderId}, ${requestedAmount})
-      ON CONFLICT (workflow_run_id) DO NOTHING
-    `,
-    sql`
-      UPDATE workflow_runs SET status = 'notifying', updated_at = now()
+
+  await sql`
+    WITH locked_order AS (
+      SELECT captured_amount FROM orders WHERE order_id = ${orderId} FOR UPDATE
+    ), current_refunded AS (
+      SELECT COALESCE(SUM(amount), 0) AS refunded FROM ledger_entries WHERE order_id = ${orderId}
+    )
+    INSERT INTO ledger_entries (workflow_run_id, order_id, amount)
+    SELECT ${runId}, ${orderId}, ${requestedAmount}
+    FROM locked_order, current_refunded
+    WHERE ${requestedAmount}::bigint <= locked_order.captured_amount - current_refunded.refunded
+    ON CONFLICT (workflow_run_id) DO NOTHING
+  `;
+
+  const [ledger] = await sql`SELECT id FROM ledger_entries WHERE workflow_run_id = ${runId}`;
+
+  if (!ledger) {
+    // Genuinely over budget once other runs against this order are
+    // accounted for — never issue; re-reject rather than silently stall.
+    const updated = await sql`
+      UPDATE workflow_runs SET status = 'rejected', updated_at = now()
       WHERE id = ${runId} AND status = 'issuing_refund'
       RETURNING id
-    `,
-  ]);
+    `;
+    if (updated.length === 0) return "issuing_refund";
+    await logStep(
+      runId,
+      "issueRefund",
+      1,
+      "failed",
+      startedAt,
+      "requested amount exceeds remaining balance once other runs against this order are accounted for",
+    );
+    return "rejected";
+  }
 
-  if (updateResult.length === 0) return "issuing_refund";
+  const updated = await sql`
+    UPDATE workflow_runs SET status = 'notifying', updated_at = now()
+    WHERE id = ${runId} AND status = 'issuing_refund'
+    RETURNING id
+  `;
+  if (updated.length === 0) return "issuing_refund";
   await logStep(runId, "issueRefund", 1, "succeeded", startedAt);
   return "notifying";
 }
