@@ -35,7 +35,10 @@ const MONGO_DB_NAME = "refund_triage";
 const RETRIEVAL_K = 5; // matches lib/workflow/decide.ts's RETRIEVAL_K
 const SUPERSEDED_ID = "return-window-2023";
 
-const azureClient = new OpenAI({ apiKey: azureApiKey, baseURL: `${azureEndpoint}/openai/v1` });
+// Matches lib/ai/azure.ts's timeout — no maxDuration constraint applies to
+// a standalone script, but an unbounded hang on a slow Azure response is
+// still worth guarding against here too.
+const azureClient = new OpenAI({ apiKey: azureApiKey, baseURL: `${azureEndpoint}/openai/v1`, timeout: 20_000 });
 
 function cosineSimilarity(a, b) {
   let dot = 0;
@@ -134,6 +137,13 @@ function fmtScore(n) {
   return n.toFixed(4);
 }
 
+// Query text is interpolated straight into markdown table cells below — an
+// unescaped `|` or newline in a future question would silently break the
+// table's column alignment.
+function escapeTableCell(s) {
+  return s.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
 async function main() {
   const client = new MongoClient(mongoUri);
   await client.connect();
@@ -219,7 +229,7 @@ async function main() {
   lines.push("|---|---|---|---|---|");
   for (const p of supersededProbe) {
     lines.push(
-      `| ${p.query} | ${p.currentRank} | ${p.currentScore !== null ? fmtScore(p.currentScore) : "—"} | ${p.supersededRank} | ${p.supersededScore !== null ? fmtScore(p.supersededScore) : "—"} |`,
+      `| ${escapeTableCell(p.query)} | ${p.currentRank} | ${p.currentScore !== null ? fmtScore(p.currentScore) : "—"} | ${p.supersededRank} | ${p.supersededScore !== null ? fmtScore(p.supersededScore) : "—"} |`,
     );
   }
   lines.push("");

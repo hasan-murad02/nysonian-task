@@ -1,6 +1,6 @@
 # Retrieval evaluation
 
-Run: 2026-09-04T11:00:28.906Z
+Run: 2026-09-04T11:08:44.652Z
 k = 5 (matches lib/workflow/decide.ts's RETRIEVAL_K)
 Policies indexed: 15 (14 active + 1 superseded)
 
@@ -172,10 +172,10 @@ retrievePolicies filters `{superseded_by: null}` before ranking, so the 2023 doc
 - precision@1: ✗
 - Retrieved:
   1. `missing-item-policy` — Missing or Incomplete Order (score 0.6069)
-  2. `escalation-fraud-signals` — Fraud and Abuse Signals (score 0.4947) ← expected
+  2. `escalation-fraud-signals` — Fraud and Abuse Signals (score 0.4946) ← expected
   3. `late-delivery-policy` — Late Delivery Compensation (score 0.4568)
   4. `damage-perishable` — Damaged Perishable/Food Items (score 0.3912)
-  5. `damage-general` — Damaged Item — General Policy (score 0.3798)
+  5. `damage-general` — Damaged Item — General Policy (score 0.3797)
 
 ### 14. Customer wants a small $30 goodwill credit for a minor inconvenience that doesn't fit any specific refund policy.
 
@@ -184,7 +184,7 @@ retrievePolicies filters `{superseded_by: null}` before ranking, so the 2023 doc
 - precision@1: ✓
 - Retrieved:
   1. `goodwill-standard` — Standard Goodwill Refund Limit (score 0.6943) ← expected
-  2. `goodwill-loyalty` — Loyalty Customer Goodwill Limit (score 0.5644)
+  2. `goodwill-loyalty` — Loyalty Customer Goodwill Limit (score 0.5645)
   3. `late-delivery-policy` — Late Delivery Compensation (score 0.5610)
   4. `escalation-high-value` — High-Value Refund Escalation (score 0.4820)
   5. `escalation-repeat-requests` — Repeat Refund Requests (score 0.4769)
@@ -195,8 +195,8 @@ retrievePolicies filters `{superseded_by: null}` before ranking, so the 2023 doc
 - hit@5: ✓ (rank 1)
 - precision@1: ✓
 - Retrieved:
-  1. `goodwill-loyalty` — Loyalty Customer Goodwill Limit (score 0.6895) ← expected
-  2. `goodwill-standard` — Standard Goodwill Refund Limit (score 0.5837)
+  1. `goodwill-loyalty` — Loyalty Customer Goodwill Limit (score 0.6894) ← expected
+  2. `goodwill-standard` — Standard Goodwill Refund Limit (score 0.5836)
   3. `late-delivery-policy` — Late Delivery Compensation (score 0.4636)
-  4. `escalation-high-value` — High-Value Refund Escalation (score 0.4508)
+  4. `escalation-high-value` — High-Value Refund Escalation (score 0.4507)
   5. `escalation-repeat-requests` — Repeat Refund Requests (score 0.4193)
