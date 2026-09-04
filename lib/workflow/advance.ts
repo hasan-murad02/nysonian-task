@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db/postgres";
+import { decideEligibility } from "@/lib/workflow/decide";
 
 // Statuses advanceWorkflow will keep dispatching through in one call. There's
 // no background worker on Vercel Hobby, so a single call has to drive a run
@@ -39,7 +40,7 @@ async function dispatch(run: Run): Promise<string> {
     case "loading_order":
       return checkEligibility(run.id, run.order_id, run.requested_amount);
     case "checking_eligibility":
-      return decide(run.id);
+      return decideEligibility(run.id, run.order_id);
     case "issuing_refund":
       return issueRefund(run.id, run.order_id, run.requested_amount);
     case "notifying":
@@ -115,22 +116,6 @@ async function checkEligibility(runId: string, orderId: string, requestedAmount:
   if (updated.length === 0) return "loading_order";
   await logStep(runId, "checkEligibility", 1, "succeeded", startedAt);
   return "checking_eligibility";
-}
-
-// Stub: no LLM/retrieval yet (Stage 4). Routes everything to review rather
-// than risk auto-approving on no real judgment — same principle as the
-// guardrails that force review on low confidence or a schema-invalid model
-// response, just applied because there's no model at all yet.
-async function decide(runId: string): Promise<string> {
-  const startedAt = new Date();
-  const updated = await sql`
-    UPDATE workflow_runs SET status = 'review_pending', updated_at = now()
-    WHERE id = ${runId} AND status = 'checking_eligibility'
-    RETURNING id
-  `;
-  if (updated.length === 0) return "checking_eligibility";
-  await logStep(runId, "decide", 1, "succeeded", startedAt, "stub: no eligibility model yet, routed to review");
-  return "review_pending";
 }
 
 // A row lock on the order (not just the run) is what actually prevents an
