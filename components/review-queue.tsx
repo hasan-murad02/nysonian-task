@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Inbox } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +50,8 @@ const STATUSES = [
   "rejected",
   "failed",
 ];
+
+const HEAD_CLASS = "text-xs font-medium tracking-wide text-muted-foreground uppercase";
 
 interface QueueRun {
   id: string;
@@ -89,10 +94,53 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
-// Matches Reconciliation's green/red scheme — shadcn's Badge has no
-// built-in "success" variant.
-function successClassName(isSuccess: boolean): string {
-  return isSuccess ? "bg-green-600 text-white" : "";
+// A leading dot reads faster than a color-only pill once several rows are
+// visible at once. It rides on bg-current, so it always matches whatever
+// text color the badge's variant/override className ends up applying —
+// nothing to keep in sync by hand.
+function StatusDot() {
+  return <span className="size-1.5 rounded-full bg-current" />;
+}
+
+// confidence comes back as a string (Postgres numeric(3,2), same
+// string-not-number precision reasoning as money's bigint columns) — this is
+// the one place that parses it, so the bar width and the printed number can
+// never drift apart.
+function ConfidenceMeter({ value }: { value: string }) {
+  const pct = Math.round(Number(value) * 100);
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="font-mono tabular-nums">{value}</span>
+      <span className="inline-block h-1 w-12 rounded-full bg-muted">
+        <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  );
+}
+
+function QueueSkeletonRow() {
+  return (
+    <TableRow>
+      <TableCell>
+        <Skeleton className="h-4 w-20" />
+      </TableCell>
+      <TableCell className="text-right">
+        <Skeleton className="ml-auto h-4 w-14" />
+      </TableCell>
+      <TableCell>
+        <Skeleton className="h-4 w-24" />
+      </TableCell>
+      <TableCell>
+        <Skeleton className="h-4 w-20" />
+      </TableCell>
+      <TableCell>
+        <Skeleton className="h-4 w-16" />
+      </TableCell>
+      <TableCell>
+        <Skeleton className="h-5 w-24 rounded-full" />
+      </TableCell>
+    </TableRow>
+  );
 }
 
 export function ReviewQueue() {
@@ -169,80 +217,89 @@ export function ReviewQueue() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Select
-          value={status}
-          onValueChange={(v) => {
-            if (!v) return;
-            setLoading(true);
-            setStatus(v);
-          }}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground">{runs.length} runs</span>
-      </div>
+      <Card className="gap-0 py-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+          <Select
+            value={status}
+            onValueChange={(v) => {
+              if (!v) return;
+              setLoading(true);
+              setStatus(v);
+            }}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="font-mono text-sm tabular-nums text-muted-foreground">{runs.length} runs</span>
+        </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Order</TableHead>
-            <TableHead>Requested</TableHead>
-            <TableHead>Reason</TableHead>
-            <TableHead>Decision</TableHead>
-            <TableHead>Confidence</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading &&
-            Array.from({ length: 4 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell colSpan={6}>
-                  <Skeleton className="h-5 w-full" />
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={HEAD_CLASS}>Order</TableHead>
+                <TableHead className={`${HEAD_CLASS} text-right`}>Requested</TableHead>
+                <TableHead className={HEAD_CLASS}>Reason</TableHead>
+                <TableHead className={HEAD_CLASS}>Decision</TableHead>
+                <TableHead className={HEAD_CLASS}>Confidence</TableHead>
+                <TableHead className={HEAD_CLASS}>Status</TableHead>
               </TableRow>
-            ))}
-          {!loading && runs.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No runs with status &quot;{status}&quot;
-              </TableCell>
-            </TableRow>
-          )}
-          {!loading &&
-            runs.map((run) => (
-              <TableRow
-                key={run.id}
-                className="cursor-pointer"
-                onClick={() => {
-                  setDetailLoading(true);
-                  setSelectedId(run.id);
-                }}
-              >
-                <TableCell>{run.order_id}</TableCell>
-                <TableCell>{formatMoney(run.requested_amount, run.currency)}</TableCell>
-                <TableCell>{run.reason ?? "—"}</TableCell>
-                <TableCell>{run.decision ?? "—"}</TableCell>
-                <TableCell>{run.confidence ?? "—"}</TableCell>
-                <TableCell>
-                  <Badge variant={statusVariant(run.status)} className={successClassName(run.status === "completed")}>
-                    {run.status}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {loading &&
+                Array.from({ length: 5 }).map((_, i) => <QueueSkeletonRow key={i} />)}
+              {!loading && runs.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="h-32 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Inbox className="size-5" />
+                      <span>No runs with status &quot;{status}&quot;</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading &&
+                runs.map((run) => (
+                  <TableRow
+                    key={run.id}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setDetailLoading(true);
+                      setSelectedId(run.id);
+                    }}
+                  >
+                    <TableCell className="font-mono font-semibold tabular-nums">{run.order_id}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold tabular-nums">
+                      {formatMoney(run.requested_amount, run.currency)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{run.reason ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-muted-foreground">{run.decision ?? "—"}</TableCell>
+                    <TableCell>
+                      {run.confidence !== null ? <ConfidenceMeter value={run.confidence} /> : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={statusVariant(run.status)}
+                        className={`font-mono ${run.status === "completed" ? "bg-success text-success-foreground" : ""}`}
+                      >
+                        <StatusDot />
+                        {run.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
 
       <Dialog open={selectedId !== null} onOpenChange={(open) => !open && setSelectedId(null)}>
         <DialogContent className="max-w-2xl">
@@ -250,83 +307,108 @@ export function ReviewQueue() {
             <DialogTitle>Refund detail</DialogTitle>
           </DialogHeader>
 
-          {detailLoading && <Skeleton className="h-40 w-full" />}
+          {detailLoading && (
+            <div className="space-y-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          )}
 
           {!detailLoading && detail && (
             <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-3">
                 <div>
-                  <div className="text-muted-foreground">Order</div>
-                  <div>{detail.run.order_id}</div>
+                  <div className="text-xs tracking-wide text-muted-foreground uppercase">Order</div>
+                  <div className="font-mono font-semibold tabular-nums">{detail.run.order_id}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Captured</div>
-                  <div>{formatMoney(detail.order?.captured_amount ?? null, detail.order?.currency ?? null)}</div>
+                  <div className="text-xs tracking-wide text-muted-foreground uppercase">Captured</div>
+                  <div className="font-mono font-semibold tabular-nums">
+                    {formatMoney(detail.order?.captured_amount ?? null, detail.order?.currency ?? null)}
+                  </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Requested</div>
-                  <div>{formatMoney(detail.run.requested_amount, detail.order?.currency ?? null)}</div>
+                  <div className="text-xs tracking-wide text-muted-foreground uppercase">Requested</div>
+                  <div className="font-mono font-semibold tabular-nums">
+                    {formatMoney(detail.run.requested_amount, detail.order?.currency ?? null)}
+                  </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Reason</div>
-                  <div>{detail.run.reason ?? "—"}</div>
+                  <div className="text-xs tracking-wide text-muted-foreground uppercase">Reason</div>
+                  <div className="text-muted-foreground">{detail.run.reason ?? "—"}</div>
                 </div>
               </div>
 
               <div>
-                <div className="mb-1 font-medium">Model recommendation</div>
-                <div className="rounded border p-2">
-                  <div className="mb-1 flex items-center gap-2">
-                    <Badge variant={detail.run.decision === "auto_approve" ? "default" : "secondary"}>
+                <div className="mb-2 font-medium">Model recommendation</div>
+                <div className="rounded-lg border p-3">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant={detail.run.decision === "auto_approve" ? "default" : "secondary"}
+                      className="font-mono"
+                    >
+                      <StatusDot />
                       {detail.run.decision ?? "no recommendation"}
                     </Badge>
                     {detail.run.confidence !== null && (
-                      <span className="text-muted-foreground">confidence {detail.run.confidence}</span>
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        confidence
+                        <ConfidenceMeter value={detail.run.confidence} />
+                      </span>
                     )}
                   </div>
-                  {detail.modelReason && <p className="text-muted-foreground">{detail.modelReason}</p>}
+                  {detail.modelReason && <p className="mt-2 text-muted-foreground">{detail.modelReason}</p>}
                   {detail.citations.length > 0 && (
-                    <ul className="mt-2 list-disc pl-4">
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {detail.citations.map((c) => (
-                        <li key={c.id}>
+                        <span
+                          key={c.id}
+                          className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs"
+                        >
                           <span className="font-medium">{c.title}</span>
-                          <span className="text-muted-foreground"> ({c.id})</span>
-                        </li>
+                          <span className="font-mono text-muted-foreground">{c.id}</span>
+                        </span>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
               </div>
 
+              <Separator />
+
               <div>
-                <div className="mb-1 font-medium">Workflow trace</div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Step</TableHead>
-                      <TableHead>Attempt</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Error</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detail.steps.map((s) => (
-                      <TableRow key={`${s.step}-${s.attempt}`}>
-                        <TableCell>{s.step}</TableCell>
-                        <TableCell>{s.attempt}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={s.status === "succeeded" ? "default" : "destructive"}
-                            className={successClassName(s.status === "succeeded")}
-                          >
-                            {s.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{s.error ?? "—"}</TableCell>
+                <div className="mb-2 font-medium">Workflow trace</div>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className={HEAD_CLASS}>Step</TableHead>
+                        <TableHead className={`${HEAD_CLASS} w-16`}>Attempt</TableHead>
+                        <TableHead className={HEAD_CLASS}>Status</TableHead>
+                        <TableHead className={HEAD_CLASS}>Error</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {detail.steps.map((s) => (
+                        <TableRow key={`${s.step}-${s.attempt}`}>
+                          <TableCell>{s.step}</TableCell>
+                          <TableCell className="font-mono tabular-nums">{s.attempt}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={s.status === "succeeded" ? "default" : "destructive"}
+                              className={`font-mono ${s.status === "succeeded" ? "bg-success text-success-foreground" : ""}`}
+                            >
+                              <StatusDot />
+                              {s.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{s.error ?? "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             </div>
           )}
